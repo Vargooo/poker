@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Poker des Mots</title>
+<style>
+:root {
+  --green: #00cc6a; --red: #ff4444; --blue: #007bff; --gold: #ffd700; --magenta: #e040fb;
+  --green-1: #e6f9ee; --green-2: #ccf3dd; --green-3: #99e7bb; --green-4: #66db99;
+  --green-5: #33cf77; --green-6: #00c355; --green-7: #00a344; --green-8: #008333;
+}
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f4f9; color: #333; padding: 20px; max-width: 900px; margin: 0 auto; }
+h2, h3 { margin-top: 0; }
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+.modal-overlay.active { display: flex; justify-content: center; align-items: center; }
+.modal-box { background: white; padding: 25px; border-radius: 8px; max-width: 500px; width: 90%; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+.modal-box.longwords { max-width: 600px; }
+.modal-btns { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; transition: opacity 0.2s; }
+button:hover { opacity: 0.9; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary { background: var(--blue); color: white; }
+.btn-gray { background: #ccc; color: #333; }
+.btn-red { background: var(--red); color: white; }
+.btn-magenta { background: var(--magenta); color: white; }
+.reel { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; width: 45px; height: 45px; border: 2px solid #ccc; border-radius: 6px; margin: 3px; cursor: pointer; background: white; font-size: 20px; font-weight: bold; position: relative; user-select: none; }
+.reel.selected { background: #ffeeba; border-color: #ffc107; }
+.reel.banked { color: white; cursor: default; }
+.reel.locked { cursor: default; opacity: 0.8; }
+.badge { position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; border-radius: 50%; background: var(--blue); color: white; font-size: 12px; line-height: 20px; text-align: center; display: none; }
+.banked-badge { position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; border-radius: 50%; font-size: 12px; line-height: 20px; text-align: center; border: 1px solid white; }
+.ai-reel { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; width: 45px; height: 45px; border: 2px solid #ccc; border-radius: 6px; margin: 3px; background: white; font-size: 20px; font-weight: bold; position: relative; }
+.ai-keep { border-color: var(--green); background: #e6f9ee; }
+.ai-reroll { border-color: var(--red); background: #ffe6e6; }
+.ai-badge { position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; border-radius: 50%; font-size: 12px; line-height: 20px; text-align: center; color: white; }
+.ai-badge.keep { background: var(--green); }
+.ai-badge.reroll { background: var(--red); }
+#reels, #aiReels { margin: 20px 0; display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; }
+#log { height: 150px; overflow-y: auto; background: #fff; border: 1px solid #ccc; padding: 10px; margin-top: 20px; font-size: 0.9em; border-radius: 4px; }
+.human-log { color: var(--blue); border-left: 3px solid var(--blue); padding-left: 8px; margin: 4px 0; }
+.ai-log { color: var(--red); border-left: 3px solid var(--red); padding-left: 8px; margin: 4px 0; }
+.highlight { font-weight: bold; color: var(--gold); text-shadow: 0 0 1px #000; }
+.dict-status { padding: 10px; border-radius: 4px; margin: 10px 0; font-size: 0.9em; }
+.dict-ok { background: #e6f9ee; color: var(--green); border: 1px solid var(--green); }
+.dict-error { background: #ffe6e6; color: var(--red); border: 1px solid var(--red); }
+#thinkingProgress { display: none; margin: 10px 0; }
+#thinkingProgress.show { display: block; }
+#thinkingBar { width: 100%; height: 12px; background: #eee; border-radius: 6px; overflow: hidden; }
+#thinkingBarFill { height: 100%; background: var(--blue); width: 0%; transition: width 0.3s; }
+.hourglass-loader { display: inline-block; animation: spin 1s linear infinite; margin-left: 5px; }
+.hourglass-loader.hidden { display: none; }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+@keyframes blurSpin { 0% { filter: blur(0px); } 50% { filter: blur(2px); } 100% { filter: blur(0px); } }
+.reel.spinning .letter { animation: blurSpin 0.1s linear infinite; }
+.banked-word-tag { display: inline-block; padding: 5px 10px; border-radius: 15px; margin: 3px; font-weight: bold; cursor: pointer; border: 1px solid transparent; }
+.banked-word-tag:hover { opacity: 0.8; }
+.remove-hint { font-size: 0.7em; margin-left: 5px; opacity: 0.7; }
+#bestSolutionBox { display: none; background: #e6f9ee; border: 1px solid var(--green); padding: 15px; border-radius: 6px; margin: 15px 0; }
+#bestSolutionBox.show { display: block; }
+.longwords-list { max-height: 300px; overflow-y: auto; }
+.longword-item { display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #eee; }
+.longword-item:nth-child(even) { background: #f9f9f9; }
+#aiTurnPanel { display: none; background: #fff3e0; border: 1px solid #ffb74d; padding: 15px; border-radius: 6px; margin: 15px 0; }
+#statusText { font-size: 1.1em; font-weight: bold; margin: 15px 0; min-height: 1.5em; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; margin: 15px 0; }
+.setup-panel, .game-panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+.game-panel { display: none; }
+</style>
+</head>
+<body>
+
+<div id="setup-panel" class="setup-panel">
+  <h2>⚙️ Configuration de la partie</h2>
+  <div>
+    <label>Charger le dictionnaire (fichier .txt) :</label><br>
+    <input type="file" id="dictFile" accept=".txt" style="margin: 10px 0;">
+    <div id="dictStatus"></div>
+    <div id="dictInfo" class="dict-status" style="display:none;"></div>
+    <div id="dictWarning" style="display:none; color: var(--red); font-size: 0.9em; margin-top: 5px;">
+      ⚠️ Attention : un grand nombre de lettres (≥14) peut ralentir le calcul de la meilleure solution.
+    </div>
+  </div>
+  <div style="margin: 15px 0;">
+    <label>Nombre de lettres (N) : </label>
+    <input type="number" id="inputN" value="12" min="2" max="20" style="width: 60px; padding: 5px;">
+    <label style="margin-left: 20px;">Nombre de manches : </label>
+    <input type="number" id="inputGames" value="2" min="1" max="10" style="width: 60px; padding: 5px;">
+  </div>
+  <button id="btnStart" class="btn-primary" disabled>🚀 COMMENCER LA PARTIE</button>
+</div>
+
+<div id="game-panel" class="game-panel">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+    <h2>🎯 Poker des Mots</h2>
+    <div>
+      <span id="turnInfo" style="font-weight: bold; font-size: 1.1em;"></span>
+      <span style="margin-left: 20px;">👤 Humain: <strong id="scoreHuman">0</strong> | 🤖 Ordi: <strong id="scoreAI">0</strong></span>
+    </div>
+  </div>
+
+  <div id="statusText"></div>
+  <div id="reels"></div>
+  <div id="wordPreview" style="text-align: center; font-size: 1.5em; font-weight: bold; margin: 10px 0; min-height: 1.5em; color: var(--blue);">—</div>
+
+  <div class="controls">
+    <button id="btnVerify" class="btn-primary" disabled>Vérifier</button>
+    <button id="btnMark" class="btn-magenta" disabled>Marquer</button>
+    <button id="btnReroll" class="btn-gray" disabled>Relancer (0/2)</button>
+    <button id="btnClearSelection" class="btn-gray" disabled>Abandonner mot</button>
+    <button id="btnValidate" class="btn-primary" disabled>Valider tour</button>
+  </div>
+  
+  <div class="controls">
+    <button id="btnBestSolution" class="btn-gray" disabled>💡 Meilleure solution</button>
+    <button id="btnTopWords" class="btn-gray" disabled>📊 100 plus longs mots</button>
+    <button id="btnManualDraw" class="btn-gray">🎲 Tirage manuel</button>
+    <button id="btnRules" class="btn-gray">📜 Règles</button>
+  </div>
+
+  <div id="bestSolutionBox">
+    <h4>💡 Meilleure solution trouvée :</h4>
+    <div id="bestSolutionWords" style="font-size: 1.2em; font-weight: bold; color: var(--green);"></div>
+    <div id="bestSolutionScore" style="font-size: 1.1em; margin-top: 5px;"></div>
+  </div>
+
+  <div id="bankedList" style="margin: 15px 0; min-height: 30px;"></div>
+
+  <div id="aiTurnPanel">
+    <h4>🤖 Tour de l'ordinateur</h4>
+    <div id="aiReels"></div>
+    <div id="aiPhase" style="font-weight: bold; margin: 10px 0;"></div>
+    <div id="thinkingProgress">
+      <div id="thinkingText" style="font-size: 0.9em; margin-bottom: 5px;"></div>
+      <div id="thinkingBar"><div id="thinkingBarFill"></div></div>
+    </div>
+    <div style="margin-top: 10px;">
+      Mots : <span id="aiWordsDisplay" style="font-weight: bold;"></span><br>
+      Score : <span id="aiTurnScore" style="font-weight: bold; color: var(--red);"></span>
+      <div id="aiProgress" style="width: 0%; height: 4px; background: var(--red); margin-top: 5px; transition: width 0.3s;"></div>
+    </div>
+  </div>
+
+  <div class="controls" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
+    <button id="btnNextRound" class="btn-primary" style="display:none;">Manche suivante ➡️</button>
+    <button id="btnNewGame" class="btn-gray">🔄 Nouvelle Partie</button>
+    <button id="btnReset" class="btn-red" style="display:none;">🏠 Retour au menu</button>
+  </div>
+
+  <div id="log"></div>
+</div>
+
+<!-- MODALES -->
+<div class="modal-overlay" id="warnModal">
+  <div class="modal-box">
+    <h3 id="warnTitle">⚠️ Attention</h3>
+    <p id="warnMsg"></p>
+    <div class="modal-btns">
+      <button class="btn-gray" id="modalCancel">Annuler</button>
+      <button class="btn-red" id="modalForce">Forcer (0 pt)</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="zeroPointModal">
+  <div class="modal-box">
+    <h3>⚠️ Tour à 0 point</h3>
+    <p id="zeroPointMsg"></p>
+    <div class="modal-btns">
+      <button class="btn-gray" id="zeroPointCancel">Annuler</button>
+      <button class="btn-red" id="zeroPointConfirm">Valider (0 pt)</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal-box">
+    <h3>🔄 Nouvelle Partie</h3>
+    <p id="confirmMsg">Voulez-vous vraiment abandonner la partie en cours et recommencer à zéro ?</p>
+    <div class="modal-btns">
+      <button class="btn-gray" id="confirmNo">NON, CONTINUER</button>
+      <button class="btn-red" id="confirmYes">OUI, REJOUER</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="rulesModal">
+  <div class="modal-box rules">
+    <h3>📜 RÈGLES DU JEU</h3>
+    <div class="rules-content">
+      <h4>🎯 Objectif</h4>
+      <p>Formez des mots avec <strong>TOUTES les lettres</strong> tirées pour marquer un maximum de points en <strong>M manches</strong> (2 par défaut).</p>
+      <h4>📝 Déroulement d'une manche</h4>
+      <ul>
+        <li><strong>1.</strong> Vous tirez <strong>N lettres</strong> (12 par défaut)</li>
+        <li><strong>2.</strong> Cliquez sur les lettres <strong>dans l'ordre</strong> pour former un mot (min. 2 lettres)</li>
+        <li><strong>3.</strong> Vous pouvez <strong>relancer jusqu'à 2 fois</strong> certaines lettres</li>
+        <li><strong>4.</strong> Marquez vos mots puis validez votre tour</li>
+        <li><strong>5.</strong> L'ordinateur joue ensuite avec son propre tirage</li>
+      </ul>
+      <h4>🏆 Système de points</h4>
+      <ul>
+        <li><strong>Score = somme des carrés des longueurs</strong></li>
+        <li><strong>p.ex. les mots RAT, REDONNER rapportent 3×3 + 8×8 = 73 points</strong></li>
+        <li><strong>Score = 0 point si un mot n'est pas valable ou si toutes les lettres ne sont pas utilisées</strong></li>
+      </ul>
+      <h4>🎮 Contrôles</h4>
+      <ul>
+        <li><strong>Vérifier</strong> : Teste si le mot est valide sans le marquer</li>
+        <li><strong>Marquer</strong> : Valide le mot sélectionné (lettres deviennent vertes)</li>
+        <li><strong>Relancer</strong> : Change les lettres sélectionnées (max 2 fois)</li>
+        <li><strong>Abandonner mot</strong> : Désélectionne les lettres du mot en cours</li>
+        <li><strong>Clic sur mot vert</strong> : Retire ce mot marqué et libère ses lettres</li>
+        <li><strong>Meilleure solution</strong> : Affiche la meilleure combinaison possible</li>
+        <li><strong>100 plus longs mots</strong> : Affiche les 100 mots les plus longs formables</li>
+        <li><strong>Tirage manuel</strong> : Saisissez les lettres du tirage vous-même (n'importe quelle longueur)</li>
+        <li><strong>Valider tour</strong> : Termine votre tour et lance l'ordi</li>
+      </ul>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-primary" onclick="document.getElementById('rulesModal').classList.remove('active')">J'AI COMPRIS !</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="longWordsModal">
+  <div class="modal-box longwords">
+    <h3>📊 100 PLUS LONGS MOTS FORMABLES</h3>
+    <div class="longwords-list" id="longWordsList"></div>
+    <div class="modal-btns">
+      <button class="btn-primary" onclick="document.getElementById('longWordsModal').classList.remove('active')">FERMER</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="manualDrawModal">
+  <div class="modal-box manual">
+    <h3>🎲 TIRAGE MANUEL</h3>
+    <p>Saisissez les lettres du tirage (sans espaces, min. 2 lettres) :</p>
+    <input type="text" id="manualLettersInput" placeholder="EXEMPLE: AEIOUYTREZRT" style="width: 80%; padding: 15px; font-size: 18px; text-transform: uppercase; margin: 15px 0; text-align: center; letter-spacing: 3px;">
+    <p id="manualDrawInfo" style="color: var(--blue); font-size: 0.9em; min-height: 20px;"></p>
+    <p id="manualDrawError" style="color: var(--red); min-height: 20px; font-size: 0.9em;"></p>
+    <div class="modal-btns">
+      <button class="btn-gray" id="manualDrawCancel">ANNULER</button>
+      <button class="btn-magenta" id="manualDrawConfirm">✅ VALIDER LE TIRAGE</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const FRENCH_FREQ = "EEEEEEEEEEEEEEAAAAAAAAASSSSSIIIIINNNNNNNTTTTTTTUUUUUURRRRRRROOOOOOLLLLDDCCCMMPPGVFBHQJKXWZY";
+let dictionary = new Set();
+let dictionaryLoaded = false;
+let N = 12, totalGames = 2, currentGame = 1;
+let scores = { human: 0, ai: 0 };
+let currentLetters = [];
+let wordTrie = null;
+let isManualDrawMode = false;
+let game = {
+  letters: [], bankedWords: [], rerollsUsed: 0,
+  player: 'human', turnZero: false, active: false, processing: false
+};
+let clickOrder = [];
+const $ = id => document.getElementById(id);
+const delay = ms => new Promise(res => setTimeout(res, ms));
+const norm = str => str.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z]/g, '');
+const log = (msg, cls='') => { const el=$('log'); if(el) { el.innerHTML+=`<div class="${cls}">${msg}</div>`; el.scrollTop=el.scrollHeight; } };
+const setStatus = msg => { const el=$('statusText'); if(el) el.innerHTML = msg + '<span class="hourglass-loader hidden" id="hourglassLoader"></span>'; };
+function getRandomLetter() { return FRENCH_FREQ[Math.floor(Math.random() * FRENCH_FREQ.length)]; }
+
+const wordColors = [
+  { bg: 'var(--green-1)', border: '#00cc6a', badge: '#000', text: '#000' },
+  { bg: 'var(--green-2)', border: '#00aa55', badge: '#fff', text: '#fff' },
+  { bg: 'var(--green-3)', border: '#008844', badge: '#fff', text: '#fff' },
+  { bg: 'var(--green-4)', border: '#006633', badge: '#fff', text: '#fff' },
+  { bg: 'var(--green-5)', border: '#009966', badge: '#fff', text: '#fff' },
+  { bg: 'var(--green-6)', border: '#00cc99', badge: '#000', text: '#000' },
+  { bg: 'var(--green-7)', border: '#00aa88', badge: '#000', text: '#000' },
+  { bg: 'var(--green-8)', border: '#007755', badge: '#fff', text: '#fff' }
+];
+
+class WordTrie {
+  constructor() { this.root = {}; this.wordCount = 0; }
+  insert(word) {
+    let node = this.root;
+    for (const char of word) { if (!node[char]) node[char] = { _end: false }; node = node[char]; }
+    node._end = true; this.wordCount++;
+  }
+  findWords(letters, minLength = 2, maxLength = 20) {
+    const counts = {};
+    for (const l of letters) counts[l] = (counts[l] || 0) + 1;
+    const results = [];
+    this._search(this.root, '', counts, minLength, maxLength, results);
+    return results;
+  }
+  _search(node, currentWord, counts, minLength, maxLength, results) {
+    if (node._end && currentWord.length >= minLength) results.push(currentWord);
+    if (currentWord.length >= maxLength) return;
+    for (const char in counts) {
+      if (counts[char] > 0 && node[char]) {
+        counts[char]--;
+        this._search(node[char], currentWord + char, counts, minLength, maxLength, results);
+        counts[char]++;
+      }
+    }
+  }
+}
+
+function saveDictionaryToMemory() {
+  try {
+    localStorage.setItem('poker_mots_dict', JSON.stringify(Array.from(dictionary)));
+  } catch(e) { console.warn('Dictionnaire trop volumineux pour la mémoire locale'); }
+}
+
+function loadDictionaryFromMemory() {
+  try {
+    const saved = localStorage.getItem('poker_mots_dict');
+    if (saved) {
+      const words = JSON.parse(saved);
+      dictionary = new Set(words);
+      wordTrie = new WordTrie();
+      words.forEach(w => wordTrie.insert(w));
+      dictionaryLoaded = dictionary.size > 0;
+      $('dictStatus').innerHTML = `<span style="color:var(--green); font-weight:bold;">✅ Dictionnaire restauré automatiquement (${dictionary.size} mots).</span>`;
+      $('dictInfo').style.display = 'block';
+      $('dictInfo').className = 'dict-status dict-ok';
+      $('dictInfo').textContent = `${dictionary.size} mots chargés | Trie: ${wordTrie.wordCount} mots (depuis la mémoire)`;
+      $('btnStart').disabled = false;
+      log(`✅ Dictionnaire restauré automatiquement. Trie construit.`, 'human-log');
+      return true;
+    }
+  } catch(e) { console.error('Erreur restauration dictionnaire', e); }
+  return false;
+}
+
+async function loadDictionaryAutomatically() {
+  try {
+    setStatus("🔄 Chargement automatique du dictionnaire dicopoker.txt...");
+    const response = await fetch('dicopoker.txt');
+    if (!response.ok) throw new Error("Fichier non trouvé (HTTP " + response.status + ")");
+    const text = await response.text();
+    dictionary.clear(); 
+    wordTrie = new WordTrie();
+    let count = 0, errors = 0;
+    text.split(/\s+/).forEach(w => {
+      try {
+        const nw = norm(w);
+        if (nw.length >= 2 && nw.length <= 40) { 
+          dictionary.add(nw); 
+          wordTrie.insert(nw); 
+          count++; 
+        }
+      } catch(e) { errors++; }
+    });
+    dictionaryLoaded = dictionary.size > 0;
+    $('dictStatus').innerHTML = `<span style="color:${dictionaryLoaded?'var(--green)':'var(--red)'}; font-weight:bold;">
+      ${dictionaryLoaded?`✅ Dictionnaire chargé automatiquement (${count} mots). Prêt à jouer.`:`❌ Erreur de chargement automatique`}
+    </span>`;
+    $('dictInfo').style.display = 'block'; 
+    $('dictInfo').className = `dict-status ${dictionaryLoaded?'dict-ok':'dict-error'}`;
+    $('dictInfo').textContent = `${count} mots chargés | ${errors} erreurs | Trie: ${wordTrie.wordCount} mots`;
+    $('btnStart').disabled = !dictionaryLoaded;
+    if (dictionaryLoaded) {
+      saveDictionaryToMemory();
+      log(`✅ ${count} mots chargés automatiquement depuis dicopoker.txt. Trie construit.`, 'human-log');
+      setStatus("✅ Dictionnaire chargé. Vous pouvez commencer la partie.");
+    }
+  } catch (err) {
+    console.warn("Chargement automatique échoué:", err);
+    $('dictStatus').innerHTML = `<span style="color:#ff9800; font-weight:bold;">⚠️ Chargement auto échoué (${err.message}). Veuillez charger le dictionnaire manuellement ou utiliser un serveur local.</span>`;
+    loadDictionaryFromMemory();
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  loadDictionaryAutomatically();
+});
+
+function showThinkingProgress(text) {
+  $('thinkingText').textContent = text || '🤖 Réflexion en cours...';
+  $('thinkingBarFill').style.width = '0%';
+  $('thinkingProgress').classList.add('show');
+}
+function updateThinkingProgress(pct) { $('thinkingBarFill').style.width = pct + '%'; }
+function hideThinkingProgress() { $('thinkingProgress').classList.remove('show'); }
+function showHourglass() { const hg = $('hourglassLoader'); if (hg) hg.classList.remove('hidden'); }
+function hideHourglass() { const hg = $('hourglassLoader'); if (hg) hg.classList.add('hidden'); }
+
+let modalResolve = null;
+const showModal = (title, msg) => new Promise(resolve => {
+  $('warnModal').classList.add('active');
+  document.querySelector('#warnModal h3').textContent = title;
+  $('warnMsg').textContent = msg;
+  modalResolve = resolve;
+});
+$('modalCancel').onclick = () => { $('warnModal').classList.remove('active'); if(modalResolve) modalResolve('cancel'); };
+$('modalForce').onclick = () => { $('warnModal').classList.remove('active'); if(modalResolve) modalResolve('force'); };
+
+let zeroPointResolve = null;
+$('zeroPointCancel').onclick = () => { $('zeroPointModal').classList.remove('active'); if(zeroPointResolve) zeroPointResolve(false); };
+$('zeroPointConfirm').onclick = () => { $('zeroPointModal').classList.remove('active'); if(zeroPointResolve) zeroPointResolve(true); };
+const showZeroPointModal = (msg) => new Promise(resolve => {
+  $('zeroPointModal').classList.add('active');
+  $('zeroPointMsg').textContent = msg || "Vous n'avez marqué aucun mot. Valider ce tour vous donnera 0 point.";
+  zeroPointResolve = resolve;
+});
+
+let confirmResolve = null;
+const showConfirm = (title, msg) => new Promise(resolve => {
+  $('confirmModal').classList.add('active');
+  document.querySelector('#confirmModal h3').textContent = title;
+  $('confirmMsg').textContent = msg;
+  confirmResolve = resolve;
+});
+$('confirmNo').onclick = () => { $('confirmModal').classList.remove('active'); if(confirmResolve) confirmResolve(false); };
+$('confirmYes').onclick = () => { $('confirmModal').classList.remove('active'); if(confirmResolve) confirmResolve(true); };
+
+$('btnRules').onclick = () => $('rulesModal').classList.add('active');
+
+$('btnManualDraw').addEventListener('click', () => {
+  $('manualLettersInput').value = '';
+  $('manualDrawError').textContent = '';
+  $('manualDrawInfo').textContent = 'Longueur du tirage : 0 lettres';
+  $('manualDrawModal').classList.add('active');
+  $('manualLettersInput').focus();
+});
+$('manualDrawCancel').onclick = () => { $('manualDrawModal').classList.remove('active'); };
+$('manualLettersInput').addEventListener('input', (e) => {
+  const cleaned = e.target.value.toUpperCase().replace(/[^A-Z]/g, '');
+  $('manualDrawInfo').textContent = `Longueur du tirage : ${cleaned.length} lettres`;
+});
+$('manualDrawConfirm').onclick = () => {
+  const input = $('manualLettersInput').value.trim().toUpperCase();
+  const cleaned = input.replace(/[^A-Z]/g, '');
+  if (cleaned.length < 2) {
+    $('manualDrawError').textContent = `❌ Il faut au moins 2 lettres.`;
+    return;
+  }
+  $('manualDrawModal').classList.remove('active');
+  isManualDrawMode = true;
+  game.letters = cleaned.split('').map(char => ({char, state: 'free'}));
+  currentLetters = cleaned.split('');
+  game.bankedWords = [];
+  game.rerollsUsed = 0;
+  game.turnZero = false;
+  clickOrder = [];
+  renderReels();
+  updateBankedList();
+  $('bestSolutionBox').classList.remove('show');
+  log(`🎲 Tirage manuel appliqué (${cleaned.length} lettres) : ${cleaned}`, 'human-log');
+  setStatus(`🎲 Tirage manuel de ${cleaned.length} lettres appliqué. Cliquez pour former des mots.`);
+};
+$('manualLettersInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') $('manualDrawConfirm').click();
+});
+
+$('btnTopWords').addEventListener('click', async () => {
+  if (!dictionaryLoaded || dictionary.size === 0) { alert("Dictionnaire non chargé !"); return; }
+  const letters = currentLetters.length > 0 ? currentLetters : game.letters.map(l => l.char);
+  const allWords = wordTrie.findWords(letters, 2, letters.length);
+  allWords.sort((a, b) => b.length - a.length);
+  const top100 = allWords.slice(0, 100);
+  const listEl = $('longWordsList');
+  listEl.innerHTML = '';
+  top100.forEach((word, idx) => {
+    const div = document.createElement('div');
+    div.className = 'longword-item';
+    div.innerHTML = `<span>${idx + 1}. <strong>${word.toUpperCase()}</strong></span><span>${word.length} lettres (+${word.length ** 2} pts)</span>`;
+    listEl.appendChild(div);
+  });
+  $('longWordsModal').classList.add('active');
+});
+
+$('btnBestSolution').addEventListener('click', async () => {
+  if (!dictionaryLoaded || dictionary.size === 0) { alert("Dictionnaire non chargé !"); return; }
+  showHourglass(); showThinkingProgress('💡 Recherche de la meilleure solution...');
+  setStatus("💡 Calcul de la meilleure solution...");
+  updateThinkingProgress(20); await delay(300); updateThinkingProgress(50);
+  const lettersToUse = currentLetters.length > 0 ? currentLetters : game.letters.map(l => l.char);
+  const best = await calculateBestScoreOptimalAsync(lettersToUse, updateThinkingProgress);
+  updateThinkingProgress(90); await delay(200);
+  $('bestSolutionWords').textContent = best.words.length > 0 ? best.words.map(w => w.toUpperCase()).join(' + ') : 'Aucune combinaison valide';
+  $('bestSolutionScore').textContent = `${best.score} points`;
+  $('bestSolutionBox').classList.add('show');
+  updateThinkingProgress(100); await delay(300);
+  hideThinkingProgress(); hideHourglass();
+  setStatus("💡 Meilleure solution affichée ci-dessus.");
+  log(`💡 Meilleure solution : ${best.words.join(' + ') || 'aucune'} = ${best.score} pts`, 'ai-log');
+});
+
+$('dictFile').addEventListener('change', async e => {
+  const file = e.target.files[0]; if (!file) return;
+  try {
+    const text = await file.text(); dictionary.clear(); wordTrie = new WordTrie();
+    let count = 0, errors = 0;
+    text.split(/\s+/).forEach(w => {
+      try {
+        const nw = norm(w);
+        if (nw.length >= 2 && nw.length <= 40) { dictionary.add(nw); wordTrie.insert(nw); count++; }
+      } catch(e) { errors++; }
+    });
+    dictionaryLoaded = dictionary.size > 0;
+    $('dictStatus').innerHTML = `<span style="color:${dictionaryLoaded?'var(--green)':'var(--red)'}; font-weight:bold;">
+      ${dictionaryLoaded?`✅ Dictionnaire chargé (${count} mots). Prêt à jouer.`:`❌ Erreur de chargement`}
+    </span>`;
+    $('dictInfo').style.display = 'block'; $('dictInfo').className = `dict-status ${dictionaryLoaded?'dict-ok':'dict-error'}`;
+    $('dictInfo').textContent = `${count} mots chargés | ${errors} erreurs | Trie: ${wordTrie.wordCount} mots`;
+    $('btnStart').disabled = !dictionaryLoaded;
+    if (dictionaryLoaded) {
+      saveDictionaryToMemory();
+      log(`✅ ${count} mots chargés avec succès. Trie construit.`, 'human-log');
+    }
+  } catch(err) {
+    $('dictStatus').innerHTML = `<span style="color:var(--red); font-weight:bold;">❌ Erreur: ${err.message}</span>`;
+    dictionaryLoaded = false; $('btnStart').disabled = true;
+  }
+});
+
+function checkLetterWarning() {
+  const val = parseInt($('inputN').value) || 12;
+  $('dictWarning').style.display = val >= 14 ? 'block' : 'none';
+}
+$('inputN').addEventListener('input', checkLetterWarning); checkLetterWarning();
+
+$('btnStart').addEventListener('click', () => {
+  if (!dictionaryLoaded || dictionary.size === 0) { alert("Le dictionnaire n'est pas chargé correctement."); return; }
+  N = parseInt($('inputN').value) || 12; totalGames = parseInt($('inputGames').value) || 2;
+  currentGame = 1; scores = { human: 0, ai: 0 };
+  isManualDrawMode = false;
+  $('setup-panel').style.display = 'none'; $('game-panel').style.display = 'block';
+  $('log').innerHTML = ''; updateScoreUI(); startRound();
+  log(`📖 Dictionnaire actif: ${dictionary.size} mots | Trie: ${wordTrie.wordCount} mots`, 'human-log');
+});
+
+$('btnReset').addEventListener('click', () => location.reload());
+$('btnNextRound').addEventListener('click', () => {
+  currentGame++;
+  isManualDrawMode = false;
+  $('btnNextRound').style.display='none';
+  $('aiTurnPanel').style.display = 'none'; $('bestSolutionBox').classList.remove('show'); startRound();
+});
+$('btnClearSelection').addEventListener('click', () => {
+  if (clickOrder.length === 0) return;
+  clickOrder.forEach(idx => { if (game.letters[idx].state === 'selected') game.letters[idx].state = 'free'; });
+  clickOrder = []; log(`❌ Sélection annulée.`, 'human-log'); setStatus("❌ Mot en cours abandonné."); renderReels();
+});
+$('btnNewGame').addEventListener('click', async () => {
+  const confirmed = await showConfirm("🔄 Nouvelle Partie", "Abandonner la partie en cours et recommencer à zéro ?");
+  if (confirmed) {
+    currentGame = 1; scores = { human: 0, ai: 0 };
+    isManualDrawMode = false;
+    $('aiTurnPanel').style.display = 'none'; $('btnNextRound').style.display = 'none';
+    $('btnReset').style.display = 'none'; $('bestSolutionBox').classList.remove('show');
+    $('log').innerHTML = ''; updateScoreUI(); startRound(); log("🔄 Nouvelle partie !");
+  }
+});
+
+function updateScoreUI() { $('scoreHuman').textContent=scores.human; $('scoreAI').textContent=scores.ai; }
+function updateTurnUI() {
+  $('turnInfo').textContent = game.player==='human' ? '👤 Tour : Humain' : '🤖 Tour : Ordi';
+  $('turnInfo').style.color = game.player==='human' ? 'var(--gold)' : 'var(--red)';
+}
+
+function startRound() {
+  if (!dictionaryLoaded || dictionary.size === 0) { alert("⚠️ Le dictionnaire semble perdu."); return; }
+  game = {
+    letters: Array.from({length: N}, () => ({char: getRandomLetter(), state:'free'})),
+    bankedWords: [], rerollsUsed: 0, player:'human', turnZero:false, active:true, processing:false
+  };
+  currentLetters = game.letters.map(l => l.char); clickOrder = [];
+  renderReels(); updateTurnUI(); updateUI(); updateBankedList();
+  $('bestSolutionBox').classList.remove('show');
+  setStatus("👆 Cliquez sur les lettres DANS L'ORDRE pour former un mot.");
+  log(`🎯 Manche ${currentGame}/${totalGames}. C'est à vous.`, 'human-log');
+}
+
+function renderReels() {
+  const container = $('reels'); container.innerHTML = '';
+  game.letters.forEach((item, idx) => {
+    const r = document.createElement('div'); r.className = `reel ${item.state}`; r.dataset.idx = idx;
+    if (item.state === 'banked') {
+      const wordIndex = game.bankedWords.findIndex(bw => bw.indices.includes(idx));
+      const colorInfo = wordColors[wordIndex % wordColors.length];
+      r.style.background = colorInfo.bg; r.style.borderColor = colorInfo.border;
+      r.innerHTML = `<div class="letter" style="color:${colorInfo.text}">${item.char}</div><div class="banked-badge" style="background:${colorInfo.badge};color:${colorInfo.text==='#000'?'#fff':'#000'}">${wordIndex+1}</div>`;
+    } else { r.innerHTML = `<div class="letter">${item.char}</div><div class="badge"></div>`; }
+    r.onclick = () => handleReelClick(idx); container.appendChild(r);
+  }); updateUI();
+}
+
+function handleReelClick(idx) {
+  if (game.player!=='human' || game.processing || !game.active) return;
+  const l = game.letters[idx];
+  if (l.state === 'banked') {
+    for (let i = game.bankedWords.length - 1; i >= 0; i--) {
+      const bw = game.bankedWords[i];
+      if (bw.indices.includes(idx)) {
+        bw.indices.forEach(i => game.letters[i].state = 'free');
+        log(`⬅️ Mot retiré : "${bw.word.toUpperCase()}"`, 'human-log');
+        setStatus(`⬅️ "${bw.word.toUpperCase()}" retiré.`);
+        game.bankedWords.splice(i, 1); updateBankedList(); renderReels(); return;
+      }
+    } return;
+  }
+  if (l.state === 'free') { l.state = 'selected'; clickOrder.push(idx); }
+  else if (l.state === 'selected') { l.state = 'free'; clickOrder = clickOrder.filter(i => i !== idx); }
+  renderReels();
+}
+
+function updateUI() {
+  document.querySelectorAll('.reel').forEach((el, idx) => {
+    const pos = clickOrder.indexOf(idx);
+    const badge = el.querySelector('.badge');
+    if (badge && game.letters[idx].state !== 'banked') {
+      badge.textContent = pos !== -1 ? pos + 1 : ''; badge.style.display = pos !== -1 ? 'flex' : 'none';
+    }
+  });
+  $('wordPreview').textContent = clickOrder.map(idx => game.letters[idx].char).join(' ') || '—';
+  const humanActive = game.player==='human' && game.active && !game.processing;
+  $('btnClearSelection').disabled = clickOrder.length === 0;
+  $('btnVerify').disabled = !humanActive || clickOrder.length < 2;
+  $('btnMark').disabled = !humanActive || clickOrder.length < 2;
+  $('btnReroll').disabled = !humanActive || clickOrder.length === 0 || game.rerollsUsed >= 2;
+  $('btnValidate').disabled = !humanActive;
+  $('btnBestSolution').disabled = !dictionaryLoaded;
+  $('btnTopWords').disabled = !dictionaryLoaded;
+}
+
+function updateBankedList() {
+  if (game.bankedWords.length === 0) { $('bankedList').textContent = ''; return; }
+  $('bankedList').innerHTML = game.bankedWords.map((bw, i) => {
+    const c = wordColors[i % wordColors.length];
+    return `<span class="banked-word-tag" style="background:${c.bg};color:${c.text};border-color:${c.border}" onclick="removeBankedWord(${i})">
+      ${bw.word.toUpperCase()} <span style="font-size:0.8em">(+${bw.word.length**2})</span>
+      <span class="remove-hint">✕ clic pour retirer</span>
+    </span>`;
+  }).join('');
+}
+
+window.removeBankedWord = function(index) {
+  if (game.processing || !game.active) return;
+  const bw = game.bankedWords[index]; if (!bw) return;
+  bw.indices.forEach(i => game.letters[i].state = 'free');
+  log(`⬅️ Mot retiré : "${bw.word.toUpperCase()}"`, 'human-log');
+  setStatus(`⬅️ "${bw.word.toUpperCase()}" retiré.`);
+  game.bankedWords.splice(index, 1); updateBankedList(); renderReels();
+};
+
+async function animateSpin(indices) {
+  const reels = document.querySelectorAll('.reel');
+  indices.forEach(idx => { if(reels[idx] && game.letters[idx].state !== 'banked') reels[idx].classList.add('spinning'); });
+  await delay(600);
+  for (const idx of indices) {
+    if(reels[idx] && game.letters[idx].state !== 'banked') {
+      reels[idx].classList.remove('spinning');
+      reels[idx].querySelector('.letter').textContent = game.letters[idx].char;
+      await delay(80);
+    }
+  }
+}
+
+$('btnVerify').addEventListener('click', () => {
+  if (clickOrder.length < 2) return;
+  const wordStr = clickOrder.map(idx => game.letters[idx].char).join('');
+  if (!dictionaryLoaded) { setStatus("❌ ERREUR: Dictionnaire perdu!"); return; }
+  dictionary.has(norm(wordStr)) ? setStatus(`✅ "${wordStr}" est VALIDE !`) : setStatus(`❌ "${wordStr}" n'est pas dans le dictionnaire.`);
+});
+
+$('btnMark').addEventListener('click', async () => {
+  if (clickOrder.length < 2) return;
+  const wordStr = clickOrder.map(idx => game.letters[idx].char).join('');
+  const normWord = norm(wordStr);
+  if (!dictionaryLoaded) { alert("⚠️ Le dictionnaire est perdu!"); return; }
+  if (dictionary.has(normWord)) {
+    game.bankedWords.push({ word: normWord, indices: [...clickOrder] });
+    clickOrder.forEach(idx => game.letters[idx].state = 'banked'); clickOrder = [];
+    log(`✅ Marque : <span class="highlight">${normWord.toUpperCase()}</span>`, 'human-log');
+    renderReels(); updateBankedList(); setStatus("✅ Mot marqué. Continuez ou validez.");
+  } else {
+    const res = await showModal("⚠️ Mot non valable", `Le mot "${wordStr}" n'est pas dans le dictionnaire.`);
+    if (res === 'force') {
+      game.turnZero = true;
+      game.bankedWords.push({ word: normWord, indices: [...clickOrder] });
+      clickOrder.forEach(idx => game.letters[idx].state = 'banked'); clickOrder = [];
+      log(`⚠️ Force "${normWord.toUpperCase()}". Score du tour = 0.`, 'human-log');
+      renderReels(); updateBankedList(); setStatus("⚠️ Mot forcé. Tour invalidé (0 pt).");
+    }
+  }
+});
+
+$('btnReroll').addEventListener('click', async () => {
+  if (clickOrder.length === 0 || game.rerollsUsed >= 2) return;
+  game.processing = true; game.rerollsUsed++;
+  log(`🎲 Relance ${game.rerollsUsed}/2 de ${clickOrder.length} lettre(s).`, 'human-log');
+  await animateSpin([...clickOrder]);
+  clickOrder.forEach(idx => { if (game.letters[idx].state !== 'banked') { game.letters[idx].char = getRandomLetter(); game.letters[idx].state = 'free'; } });
+  currentLetters = game.letters.map(l => l.char); clickOrder = []; game.processing = false;
+  renderReels(); setStatus(`Relance effectuée. ${2-game.rerollsUsed} restante(s).`);
+});
+
+$('btnValidate').addEventListener('click', async () => {
+  if (!game.active) return;
+  const sumLen = game.bankedWords.reduce((a, w) => a + w.word.length, 0);
+  const totalLetters = game.letters.length;
+  const isValidCombo = sumLen === totalLetters && game.bankedWords.length >= 1;
+  if (!isValidCombo && !game.turnZero) {
+    const confirmed = await showZeroPointModal(`Cette combinaison utilise ${sumLen} lettres sur ${totalLetters}. Valider avec 0 point ?`);
+    if (!confirmed) return;
+    game.turnZero = true;
+  }
+  await evaluateTurn('human');
+});
+
+async function aiPlay() {
+  showHourglass(); showThinkingProgress("🤖 L'ordi réfléchit..."); updateThinkingProgress(5);
+  setStatus("🤖 L'ordi réfléchit...");
+  $('aiTurnPanel').style.display = 'block';
+  $('aiWordsDisplay').textContent = '—';
+  $('aiTurnScore').textContent = '0 pts';
+  $('aiPhase').textContent = '🎲 Tirage de N lettres...';
+  $('aiProgress').style.width = '10%';
+  game.player = 'ai'; game.active = false; game.processing = true; updateTurnUI();
+  const aiLetters = Array.from({length: N}, () => getRandomLetter());
+  game.letters = aiLetters.map(char => ({char, state: 'free'}));
+  currentLetters = [...aiLetters];
+  renderReels();
+  updateThinkingProgress(10);
+  renderAiReels(aiLetters, []); await delay(800);
+  updateThinkingProgress(25); $('aiPhase').textContent = '🔍 Analyse et 1ère optimisation...'; $('aiProgress').style.width = '30%';
+  await delay(400);
+  const step1 = aiCalculateStep(aiLetters);
+  renderAiReels(step1.letters, step1.keep);
+  $('aiProgress').style.width = '50%'; await delay(600);
+  updateThinkingProgress(50); $('aiPhase').textContent = '🔄 Relance des lettres inutiles...'; $('aiProgress').style.width = '60%';
+  const reroll1 = aiLetters.filter((_, i) => !step1.keep.includes(i));
+  await animateAiReroll(reroll1.length);
+  const newLetters1 = Array.from({length: reroll1.length}, () => getRandomLetter());
+  let li = 0; aiLetters.forEach((_, i) => { if (!step1.keep.includes(i)) aiLetters[i] = newLetters1[li++]; });
+  updateThinkingProgress(65); $('aiPhase').textContent = '🔍 2ème optimisation...'; $('aiProgress').style.width = '70%';
+  await delay(400);
+  const step2 = aiCalculateStep(aiLetters);
+  renderAiReels(aiLetters, step2.keep);
+  $('aiProgress').style.width = '85%'; await delay(400);
+  updateThinkingProgress(80); $('aiPhase').textContent = '🎲 Dernière relance...';
+  const reroll2 = aiLetters.filter((_, i) => !step2.keep.includes(i));
+  await animateAiReroll(reroll2.length);
+  const newLetters2 = Array.from({length: reroll2.length}, () => getRandomLetter());
+  li = 0; aiLetters.forEach((_, i) => { if (!step2.keep.includes(i)) aiLetters[i] = newLetters2[li++]; });
+  updateThinkingProgress(85); $('aiPhase').textContent = '✅ Calcul du score final...'; $('aiProgress').style.width = '95%';
+  renderAiReels(aiLetters, Array.from({length: N}, (_, i) => i));
+  const res = await calculateBestScoreOptimalAsync(aiLetters, (pct) => {
+    updateThinkingProgress(85 + (pct * 0.15));
+    $('aiProgress').style.width = (95 + (pct * 0.05)) + '%';
+  });
+  const allWordsCombined = res.words.join('');
+  const canFormAll = canFormWordFromLetters(allWordsCombined, aiLetters);
+  let finalResult;
+  if (canFormAll && res.words.length > 0) {
+    finalResult = {
+      score: res.words.reduce((sum, w) => sum + w.length ** 2, 0),
+      words: res.words
+    };
+  } else {
+    log(`⚠️ Solution invalide détectée: ${res.words.join(' + ')}, score = 0`, 'ai-log');
+    finalResult = { score: 0, words: [] };
+  }
+  const wordsStr = finalResult.words.length > 0 ? finalResult.words.join(' + ') : 'Aucune combinaison valide';
+  $('aiWordsDisplay').textContent = wordsStr;
+  $('aiTurnScore').textContent = `${finalResult.score} pts`;
+  $('aiPhase').textContent = `🏆 Tour terminé !`;
+  $('aiProgress').style.width = '100%';
+  updateThinkingProgress(100); await delay(300);
+  hideThinkingProgress(); hideHourglass();
+  scores.ai += finalResult.score;
+  updateScoreUI();
+  log(`🤖 Ordi marque : <span class="highlight">${wordsStr}</span> → <span class="highlight">${finalResult.score} pts</span>`, 'ai-log');
+  game.processing = false;
+  await delay(800);
+  endRound();
+}
+
+function aiCalculateStep(letters) {
+  const valid = wordTrie.findWords(letters, 2, N);
+  let bestWord = '';
+  for(const w of valid) if(w.length > bestWord.length) bestWord = w;
+  const keep = [];
+  if (bestWord) {
+    const needed = {};
+    for(const l of bestWord) needed[l] = (needed[l]||0) + 1;
+    letters.forEach((l, i) => { if(needed[l] > 0) { needed[l]--; keep.push(i); } });
+  }
+  return { letters, keep };
+}
+
+function renderAiReels(letters, keepIndices) {
+  const container = $('aiReels'); container.innerHTML = '';
+  letters.forEach((char, i) => {
+    const r = document.createElement('div');
+    const isKeep = keepIndices.includes(i);
+    r.className = `ai-reel ${isKeep ? 'ai-keep' : 'ai-reroll'}`;
+    r.innerHTML = `${char}<div class="ai-badge ${isKeep ? 'keep' : 'reroll'}">${isKeep ? '✓' : '✗'}</div>`;
+    container.appendChild(r);
+  });
+}
+
+async function animateAiReroll(count) {
+  const reels = document.querySelectorAll('.ai-reel.ai-reroll');
+  reels.forEach(r => {
+    const d = document.createElement('div');
+    d.className = 'letter';
+    d.style.animation = 'blurSpin 0.1s linear infinite';
+    d.textContent = '?';
+    r.insertBefore(d, r.firstChild);
+  });
+  await delay(600);
+  reels.forEach(r => {
+    r.classList.remove('ai-reroll');
+    r.classList.add('ai-new');
+    const d = r.querySelector('.letter');
+    if(d) { d.style.animation = ''; d.textContent = r.textContent.trim().replace(/[✓✗]/g, ''); }
+  });
+  await delay(300);
+}
+
+async function evaluateTurn(player) {
+  game.active = false; game.processing = true; updateUI();
+  let score = 0;
+  if (!game.turnZero) {
+    const totalLetters = game.letters.length;
+    const sumLen = game.bankedWords.reduce((a, w) => a + w.word.length, 0);
+    if (sumLen === totalLetters && game.bankedWords.length >= 1) {
+      score = game.bankedWords.reduce((a, w) => a + w.word.length ** 2, 0);
+    }
+  }
+  scores[player] += score;
+  updateScoreUI();
+  log(`${player==='human'?'👤':''} Tour validé. Mots : ${game.bankedWords.map(b=>b.word.toUpperCase()).join(', ')||'aucun'}. Score : +${score}`, player==='human'?'human-log':'ai-log');
+  setStatus(score > 0 ? `🎉 +${score} points !` : `😐 0 point.`);
+  game.processing = false;
+  if (player === 'human') { await delay(800); await aiPlay(); } else { endRound(); }
+}
+
+function endRound() {
+  game.active = false;
+  document.querySelectorAll('.reel').forEach(r => r.classList.add('locked'));
+  if (currentGame < totalGames) {
+    $('btnNextRound').style.display = 'inline-block';
+    $('btnReset').style.display = 'inline-block';
+    setStatus(`✅ Manche ${currentGame} terminée. Humain: ${scores.human} | Ordi: ${scores.ai}.`);
+  } else {
+    const msg = scores.human > scores.ai ? '🎉 VICTOIRE HUMAINE !' : (scores.human < scores.ai ? '💀 VICTOIRE DE L\'ORDI !' : '🤝 ÉGALITÉ !');
+    log(`<span class="highlight" style="font-size:1.2em;">${msg}</span> Score final : ${scores.human} - ${scores.ai}`);
+    $('btnNextRound').style.display = 'none';
+    $('btnReset').style.display = 'inline-block';
+    $('aiTurnPanel').style.display = 'none';
+    setStatus(msg);
+  }
+}
+
+function findCoveringWords(letters) {
+  if (letters.length === 0) return [];
+  const possibleWords = wordTrie.findWords(letters, 2, letters.length);
+  possibleWords.sort((a, b) => b.length - a.length);
+  for (const w of possibleWords) {
+    if (canFormWordFromLetters(w, letters)) {
+      const remaining = removeLettersFromCounts(letters, w);
+      const subSolution = findCoveringWords(remaining);
+      if (subSolution !== null) {
+        return [w, ...subSolution];
+      }
+    }
+  }
+  return null;
+}
+
+async function calculateBestScoreOptimalAsync(letters, progressCallback) {
+  const totalLen = letters.length;
+  if (totalLen > 15) {
+    return await calculateGreedyOptimalFast(letters, progressCallback);
+  }
+  const strategies = [];
+  strategies.push({ pattern: [totalLen], desc: '1 mot de N' });
+  for (let i = 2; i <= totalLen - 2; i++) {
+    const j = totalLen - i;
+    if (j >= 2) strategies.push({ pattern: [i, j], desc: `${i}+${j}` });
+  }
+  for (let i = 2; i <= totalLen - 4; i++) {
+    for (let j = 2; j <= totalLen - i - 2; j++) {
+      const k = totalLen - i - j;
+      if (k >= 2) strategies.push({ pattern: [i, j, k], desc: `${i}+${j}+${k}` });
+    }
+  }
+  if (progressCallback) progressCallback(10);
+  await delay(1);
+  for (let s = 0; s < strategies.length; s++) {
+    const strategy = strategies[s];
+    const pattern = strategy.pattern;
+    const wordLists = [];
+    for (const len of pattern) {
+      const words = wordTrie.findWords(letters, len, len);
+      wordLists.push(words);
+    }
+    if (progressCallback) progressCallback(10 + (s / strategies.length) * 80);
+    await delay(1);
+    if (pattern.length === 1) {
+      if (wordLists[0].length > 0) {
+        return { score: totalLen ** 2, words: [wordLists[0][0]] };
+      }
+    } else if (pattern.length === 2) {
+      for (const w1 of wordLists[0]) {
+        for (const w2 of wordLists[1]) {
+          if (canFormWordFromLetters(w1 + w2, letters)) {
+            return { score: w1.length ** 2 + w2.length ** 2, words: [w1, w2] };
+          }
+        }
+      }
+    } else if (pattern.length === 3) {
+      for (const w1 of wordLists[0]) {
+        for (const w2 of wordLists[1]) {
+          for (const w3 of wordLists[2]) {
+            if (canFormWordFromLetters(w1 + w2 + w3, letters)) {
+              return { score: w1.length ** 2 + w2.length ** 2 + w3.length ** 2, words: [w1, w2, w3] };
+            }
+          }
+        }
+      }
+    }
+    if (progressCallback) progressCallback(10 + ((s + 1) / strategies.length) * 80);
+  }
+  if (progressCallback) progressCallback(100);
+  return { score: 0, words: [] };
+}
+
+async function calculateGreedyOptimalFast(letters, progressCallback) {
+  const totalLen = letters.length;
+  if (progressCallback) progressCallback(10);
+  await delay(1);
+  const allWords = wordTrie.findWords(letters, 2, totalLen);
+  allWords.sort((a, b) => b.length - a.length);
+  if (progressCallback) progressCallback(30);
+  await delay(1);
+  for (const candidate of allWords) {
+    if (!canFormWordFromLetters(candidate, letters)) continue;
+    const remainingLetters = removeLettersFromCounts(letters, candidate);
+    const remainderSolution = findCoveringWords(remainingLetters);
+    if (remainderSolution !== null) {
+      const combination = [candidate, ...remainderSolution];
+      const score = candidate.length ** 2 + remainderSolution.reduce((sum, w) => sum + w.length ** 2, 0);
+      return { score, words: combination };
+    }
+    if (progressCallback) {
+      const idx = allWords.indexOf(candidate);
+      progressCallback(30 + (idx / allWords.length) * 60);
+      await delay(1);
+    }
+  }
+  if (progressCallback) progressCallback(100);
+  return { score: 0, words: [] };
+}
+
+function removeLettersFromCounts(letters, word) {
+  const counts = {};
+  for (const l of letters) counts[l] = (counts[l] || 0) + 1;
+  for (const l of word) {
+    if (counts[l] > 0) counts[l]--;
+  }
+  const result = [];
+  for (const l in counts) {
+    for (let i = 0; i < counts[l]; i++) result.push(l);
+  }
+  return result;
+}
+
+function canFormWordFromLetters(word, letters) {
+  const counts = {};
+  for (const l of letters) counts[l] = (counts[l] || 0) + 1;
+  for (const l of word) {
+    if (!counts[l] || counts[l] <= 0) return false;
+    counts[l]--;
+  }
+  return true;
+}
+</script>
+</body>
+</html>
